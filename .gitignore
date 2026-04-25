@@ -1,0 +1,52 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+env/
+
+# Build outputs
+dist/
+build/
+coverage/
+.coverage
+htmlcov/
+
+# Caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python packaging
+*.egg-info/
+
+# Node artifacts
+.npm/
+.yarn/
+.pnpm-store/
