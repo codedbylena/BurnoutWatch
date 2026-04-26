@@ -40,6 +40,10 @@ export function BurnoutStatusCheck({
           return 94;
         }
 
+        if (!isAnalyzing && prev < 100) {
+          return prev + 2;
+        }
+
         if (!isAnalyzing && prev >= 100) {
           clearInterval(interval);
           setTimeout(onComplete, 300);
