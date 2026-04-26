@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface BurnoutStatusCheckProps {
   onComplete: () => void;
