@@ -6,6 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Sun, Moon, Clock } from 'lucide-react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface BurnoutQuestionnaireProps {
   onComplete: () => void;
