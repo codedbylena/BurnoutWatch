@@ -21,6 +21,11 @@ export function DeviceMetricReadinessScreen({
   const metrics = availability?.metrics ?? {};
   const permissionMetrics = permissions ?? {};
   const isAvailable = availability?.providerAvailable === true;
+  const platformMode = availability?.demoMode
+    ? 'demo mode'
+    : isAvailable
+      ? 'development build'
+      : 'Expo Go or missing native module';
 
   return (
     <ScreenShell
@@ -43,8 +48,8 @@ export function DeviceMetricReadinessScreen({
           />
           <StatusRow
             label="Platform mode"
-            value={isAvailable ? 'development build' : 'Expo Go or missing native module'}
-            tone={isAvailable ? 'brand' : 'danger'}
+            value={platformMode}
+            tone={availability?.demoMode ? 'warning' : isAvailable ? 'brand' : 'danger'}
           />
         </SectionCard>
 

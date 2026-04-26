@@ -27,12 +27,9 @@ function normalizeHealthConnectDailyRecord(workerId, record, permissionMap = {})
     sourceRecordedAt: record.sourceRecordedAt ?? null,
   });
 
-  const sleepQualityProxy =
-    typeof record.sleepStageRatio === 'number' ? record.sleepStageRatio : null;
-
   const metrics = [
     ['sleep_duration_hours', record.sleepDurationHours ?? null],
-    ['sleep_quality_proxy', sleepQualityProxy],
+    ['sleep_quality_proxy', record.sleepQualityProxy ?? null],
     ['step_count', record.stepCount ?? null],
     ['resting_heart_rate_bpm', record.restingHeartRateBpm ?? null],
     ['heart_rate_variability_ms', record.heartRateVariabilityMs ?? null],

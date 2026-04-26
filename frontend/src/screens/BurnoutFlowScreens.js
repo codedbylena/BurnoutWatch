@@ -110,12 +110,24 @@ function BurnoutLoginScreen({ onLogin }) {
   );
 }
 
-function BurnoutDashboardScreen({ onStartCheckIn, onOpenDeviceSync }) {
+function formatRiskTier(tier) {
+  if (!tier) {
+    return 'Pending';
+  }
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
+function BurnoutDashboardScreen({ burnoutScoreResult, onStartCheckIn, onOpenDeviceSync }) {
   const steps = [
     { label: 'Morning reflection', complete: true },
     { label: 'Energy check', complete: true },
     { label: 'Evening wind-down', complete: false },
   ];
+  const riskTier = formatRiskTier(burnoutScoreResult?.risk_tier);
+  const scoreText = burnoutScoreResult ? `${burnoutScoreResult.burnout_score}/100` : 'Sync device metrics';
+  const confidenceText = burnoutScoreResult
+    ? `${Math.round(burnoutScoreResult.confidence * 100)}% confidence`
+    : 'Open Device Metric Sync to calculate your current score.';
 
   return (
     <Shell bright>
@@ -129,15 +141,15 @@ function BurnoutDashboardScreen({ onStartCheckIn, onOpenDeviceSync }) {
           <Text style={styles.sectionTitle}>Current Status</Text>
           <View style={styles.statusRow}>
             <View style={styles.statusOrb}>
-              <Text style={styles.statusOrbText}>M</Text>
+              <Text style={styles.statusOrbText}>{riskTier.charAt(0)}</Text>
             </View>
             <View style={styles.flex}>
               <Text style={styles.mutedText}>Burnout Level</Text>
-              <Text style={styles.statusText}>Moderate</Text>
+              <Text style={styles.statusText}>{riskTier}</Text>
             </View>
           </View>
-          <Text style={styles.bodyText}>Pay attention to self-care.</Text>
-          <Text style={styles.timestampText}>Last check-in: Today, 9:30 AM</Text>
+          <Text style={styles.bodyText}>{scoreText}</Text>
+          <Text style={styles.timestampText}>{confidenceText}</Text>
         </View>
 
         <View style={styles.card}>
@@ -154,7 +166,11 @@ function BurnoutDashboardScreen({ onStartCheckIn, onOpenDeviceSync }) {
         <View style={styles.weekGrid}>
           <MiniStat value="5" label="Check-ins" />
           <MiniStat value="3" label="Good days" tone="success" />
-          <MiniStat value="68%" label="Well-being" tone="dark" />
+          <MiniStat
+            value={burnoutScoreResult ? `${Math.round(burnoutScoreResult.burnout_score)}` : '--'}
+            label="Risk score"
+            tone="dark"
+          />
         </View>
 
         <View style={styles.card}>
@@ -196,9 +212,10 @@ function BurnoutCheckInPrepScreen({ onComplete }) {
   );
 }
 
-function BurnoutCheckInScreen({ onComplete, onBack }) {
+function BurnoutCheckInScreen({ onComplete, onBack, onFaceScan }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [showCameraRequest, setShowCameraRequest] = useState(false);
+  const [cameraState, setCameraState] = useState({ loading: false, error: null });
   const questions = [
     { text: 'How would you rate your energy level today?', subtitle: 'Be honest with yourself.' },
     { text: 'How much stress are you feeling?', subtitle: "There's no right or wrong answer." },
@@ -214,6 +231,45 @@ function BurnoutCheckInScreen({ onComplete, onBack }) {
     setShowCameraRequest(true);
   }
 
+  async function handleCameraCapture() {
+    setCameraState({ loading: true, error: null });
+    try {
+      let ImagePicker = null;
+      try {
+        ImagePicker = require('expo-image-picker');
+      } catch (error) {
+        throw new Error('Camera module is unavailable. Install expo-image-picker in the frontend app.');
+      }
+
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (permission.status !== 'granted') {
+        throw new Error('Camera permission was denied.');
+      }
+
+      const launchResult = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.85,
+      });
+      if (launchResult.canceled || !launchResult.assets?.length) {
+        throw new Error('Camera capture was cancelled.');
+      }
+
+      const asset = launchResult.assets[0];
+      if (onFaceScan) {
+        await onFaceScan({
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSizeBytes: asset.fileSize ?? null,
+        });
+      }
+      setCameraState({ loading: false, error: null });
+      onComplete();
+    } catch (error) {
+      setCameraState({ loading: false, error: error.message });
+    }
+  }
+
   if (showCameraRequest) {
     return (
       <Shell bright>
@@ -224,7 +280,12 @@ function BurnoutCheckInScreen({ onComplete, onBack }) {
             <Text style={styles.questionTitle}>One more thing...</Text>
             <Text style={styles.bodyText}>Complete your check-in with a quick face scan.</Text>
             <Text style={styles.helper}>Images are processed securely and never stored.</Text>
-            <PrimaryButton label="Allow Camera Access" onPress={onComplete} />
+            {cameraState.error ? <Text style={styles.helper}>{cameraState.error}</Text> : null}
+            <PrimaryButton
+              label={cameraState.loading ? 'Capturing...' : 'Allow Camera Access'}
+              onPress={handleCameraCapture}
+              disabled={cameraState.loading}
+            />
             <PrimaryButton label="Skip for now" onPress={onComplete} muted />
           </View>
         </View>

@@ -11,6 +11,7 @@ function createMetricsSyncService({ healthIngestionService, metricsApiClient }) 
       const summaries = await healthIngestionService.fetchDailySummaries(workerId, startDate, endDate);
       const ingestResponse = await metricsApiClient.ingestSummaries(summaries);
       const canonicalSummaries = await metricsApiClient.getDailySummaries(workerId, startDate, endDate);
+      const burnoutScore = await metricsApiClient.getBurnoutScore(workerId, startDate, endDate);
 
       return {
         startDate,
@@ -18,6 +19,7 @@ function createMetricsSyncService({ healthIngestionService, metricsApiClient }) 
         summaries,
         ingestResponse,
         canonicalSummaries,
+        burnoutScore,
       };
     },
   };

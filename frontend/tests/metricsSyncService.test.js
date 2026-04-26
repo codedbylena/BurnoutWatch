@@ -15,6 +15,9 @@ test('metrics api client posts ingest payloads and reads summaries', async () =>
         if (url.includes('/metrics/daily-summaries')) {
           return [{ local_date: '2026-04-26' }];
         }
+        if (url.includes('/scoring/burnout')) {
+          return { burnout_score: 42, risk_tier: 'moderate' };
+        }
 
         return { ingested_count: 1 };
       },
@@ -28,11 +31,21 @@ test('metrics api client posts ingest payloads and reads summaries', async () =>
 
   await client.ingestSummaries([{ worker_id: 'worker-1', local_date: '2026-04-26' }]);
   const summaries = await client.getDailySummaries('worker-1', '2026-04-20', '2026-04-26');
+  const score = await client.getBurnoutScore('worker-1', '2026-04-20', '2026-04-26');
+  const faceScan = await client.analyzeFaceScanAndScore('worker-1', '2026-04-20', '2026-04-26', {
+    width: 1920,
+    height: 1080,
+    fileSizeBytes: 900000,
+  });
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 4);
   assert.match(calls[0].url, /\/metrics\/ingest$/);
   assert.match(calls[1].url, /worker_id=worker-1/);
+  assert.match(calls[2].url, /\/scoring\/burnout/);
+  assert.match(calls[3].url, /\/ml\/facial-fatigue\/analyze-photo/);
   assert.equal(summaries[0].local_date, '2026-04-26');
+  assert.equal(score.risk_tier, 'moderate');
+  assert.equal(faceScan.ingested_count, 1);
 });
 
 test('metrics sync service uses recent date window and returns canonical summaries', async () => {
@@ -52,6 +65,15 @@ test('metrics sync service uses recent date window and returns canonical summari
     async getDailySummaries(workerId, startDate, endDate) {
       return [{ worker_id: workerId, local_date: startDate }, { worker_id: workerId, local_date: endDate }];
     },
+    async getBurnoutScore(workerId, startDate, endDate) {
+      return {
+        worker_id: workerId,
+        start_date: startDate,
+        end_date: endDate,
+        burnout_score: 42,
+        risk_tier: 'moderate',
+      };
+    },
   };
 
   const service = createMetricsSyncService({
@@ -64,6 +86,7 @@ test('metrics sync service uses recent date window and returns canonical summari
   assert.equal(result.startDate, '2026-04-20');
   assert.equal(result.endDate, '2026-04-26');
   assert.equal(result.canonicalSummaries.length, 2);
+  assert.equal(result.burnoutScore.risk_tier, 'moderate');
 });
 
 test('worker identity store persists through injected secure store', async () => {

@@ -3,8 +3,10 @@ import { Platform, SafeAreaView, StatusBar, StyleSheet, View } from 'react-nativ
 
 const { createHealthIngestionService } = require('./src/metrics/healthIngestionService');
 const { createMetricsApiClient } = require('./src/services/metricsApiClient');
+const { createDemoMetricsApiClient } = require('./src/services/demoMetricsApiClient');
 const { createMetricsSyncService } = require('./src/services/metricsSyncService');
 const { createWorkerIdentityStore } = require('./src/services/workerIdentityStore');
+const { isDemoModeEnabled } = require('./src/services/demoMode');
 const { DeviceMetricOverviewScreen } = require('./src/screens/DeviceMetricOverviewScreen');
 const { DeviceMetricReadinessScreen } = require('./src/screens/DeviceMetricReadinessScreen');
 const { DeviceMetricManualScreen } = require('./src/screens/DeviceMetricManualScreen');
@@ -19,6 +21,7 @@ const {
   BurnoutLoginScreen,
   BurnoutStatusCheckScreen,
 } = require('./src/screens/BurnoutFlowScreens');
+const { buildRecentDateRange } = require('./src/metrics/dateUtils');
 const { buildManualSummary } = require('./src/metrics/manualEntry');
 
 const workerIdentityStore = createWorkerIdentityStore();
@@ -30,6 +33,7 @@ const SCREEN_TABS = [
 ];
 
 export default function App() {
+  const demoMode = isDemoModeEnabled();
   const [workerId, setWorkerId] = useState('');
   const [availability, setAvailability] = useState(null);
   const [permissions, setPermissions] = useState(null);
@@ -37,12 +41,16 @@ export default function App() {
   const [syncState, setSyncState] = useState({ loading: true, syncing: false, requesting: false });
   const [manualSubmitState, setManualSubmitState] = useState({ submitting: false, error: null });
   const [canonicalSummaries, setCanonicalSummaries] = useState([]);
+  const [burnoutScoreResult, setBurnoutScoreResult] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [appRoute, setAppRoute] = useState('login');
   const [manualForm, setManualForm] = useState(createDefaultManualForm());
 
   const healthIngestionService = useMemo(() => createHealthIngestionService(), []);
-  const metricsApiClient = useMemo(() => createMetricsApiClient({ platform: Platform.OS }), []);
+  const metricsApiClient = useMemo(
+    () => (demoMode ? createDemoMetricsApiClient() : createMetricsApiClient({ platform: Platform.OS })),
+    [demoMode]
+  );
   const metricsSyncService = useMemo(
     () =>
       createMetricsSyncService({
@@ -69,7 +77,9 @@ export default function App() {
         setWorkerId(storedWorkerId ?? '');
         setAvailability(providerAvailability);
         setStatusMessage(
-          providerAvailability.providerAvailable
+          demoMode
+            ? 'Demo mode is running with seeded phone health data and an in-memory backend.'
+            : providerAvailability.providerAvailable
             ? `Health connector available on ${Platform.OS}.`
             : `Health connector unavailable on ${Platform.OS}. Use a development build with native permissions enabled.`
         );
@@ -89,7 +99,7 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [healthIngestionService]);
+  }, [demoMode, healthIngestionService]);
 
   async function persistWorkerId(nextWorkerId) {
     const trimmed = nextWorkerId.trim();
@@ -131,6 +141,7 @@ export default function App() {
     try {
       const syncResult = await metricsSyncService.syncRecentDays(persistedWorkerId, 7);
       setCanonicalSummaries(syncResult.canonicalSummaries);
+      setBurnoutScoreResult(syncResult.burnoutScore);
       setStatusMessage(
         `Synced ${syncResult.ingestResponse.ingested_count} summaries from ${syncResult.startDate} to ${syncResult.endDate} using ${metricsApiClient.baseUrl}.`
       );
@@ -159,11 +170,13 @@ export default function App() {
         new Date().toISOString()
       );
       const ingestResponse = await metricsApiClient.ingestSummaries([summary]);
+      const { startDate, endDate } = buildRecentDateRange(7);
       const canonicalForDay = await metricsApiClient.getDailySummaries(
         persistedWorkerId,
         manualForm.localDate,
         manualForm.localDate
       );
+      const burnoutScore = await metricsApiClient.getBurnoutScore(persistedWorkerId, startDate, endDate);
 
       setCanonicalSummaries((current) => {
         const withoutUpdatedDay = current.filter((item) => item.local_date !== manualForm.localDate);
@@ -171,6 +184,7 @@ export default function App() {
           b.local_date.localeCompare(a.local_date)
         );
       });
+      setBurnoutScoreResult(burnoutScore);
       setStatusMessage(
         `Saved ${ingestResponse.ingested_count} manual summary for ${manualForm.localDate}.`
       );
@@ -183,6 +197,22 @@ export default function App() {
     }
 
     setManualSubmitState({ submitting: false, error: null });
+  }
+
+  async function handleFaceScan(photoPayload) {
+    const persistedWorkerId = await persistWorkerId(workerId || 'worker-checkin');
+    const { startDate, endDate } = buildRecentDateRange(7);
+    const result = await metricsApiClient.analyzeFaceScanAndScore(
+      persistedWorkerId,
+      startDate,
+      endDate,
+      photoPayload
+    );
+    setBurnoutScoreResult(result.burnout_score);
+    setStatusMessage(
+      `Face scan complete (${result.facial_fatigue.risk_tier}). Burnout score updated to ${result.burnout_score.burnout_score}/100.`
+    );
+    return result;
   }
 
   function handleTabChange(nextTab) {
@@ -206,6 +236,7 @@ export default function App() {
     availability,
     permissions,
     canonicalSummaries,
+    burnoutScoreResult,
     manualSubmitState,
     tabs: SCREEN_TABS,
     activeTab: activeTab === 'manualEntry' ? 'manual' : activeTab,
@@ -218,6 +249,7 @@ export default function App() {
   } else if (appRoute === 'dashboard') {
     screen = (
       <BurnoutDashboardScreen
+        burnoutScoreResult={burnoutScoreResult}
         onOpenDeviceSync={() => {
           setActiveTab('overview');
           setAppRoute('deviceMetrics');
@@ -231,6 +263,7 @@ export default function App() {
     screen = (
       <BurnoutCheckInScreen
         onBack={() => setAppRoute('dashboard')}
+        onFaceScan={handleFaceScan}
         onComplete={() => setAppRoute('statusCheck')}
       />
     );

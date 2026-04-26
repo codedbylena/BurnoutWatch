@@ -81,6 +81,7 @@ export function DeviceMetricOverviewScreen({
   statusMessage,
   availability,
   canonicalSummaries,
+  burnoutScoreResult,
   tabs,
   activeTab,
   onTabChange,
@@ -93,7 +94,9 @@ export function DeviceMetricOverviewScreen({
   const connectorTone =
     availability?.providerAvailable === true ? 'success' : syncState.loading ? 'warning' : 'danger';
   const connectorLabel =
-    availability?.providerAvailable === true
+    availability?.demoMode
+      ? 'Demo connector'
+      : availability?.providerAvailable === true
       ? 'Connector ready'
       : syncState.loading
         ? 'Checking connector'
@@ -169,6 +172,22 @@ export function DeviceMetricOverviewScreen({
 
         <SectionCard title="Today at a glance" subtitle="Canonical device data returned from the backend." accent="success">
           <MetricGrid summary={latestSummary} />
+        </SectionCard>
+
+        <SectionCard title="Burnout score" subtitle="Final aggregate score from device and manual metrics." accent="warning">
+          <View style={styles.scoreRow}>
+            <View>
+              <Text style={styles.scoreValue}>
+                {burnoutScoreResult ? `${burnoutScoreResult.burnout_score}/100` : '--'}
+              </Text>
+              <Text style={styles.scoreMeta}>
+                {burnoutScoreResult
+                  ? `${burnoutScoreResult.risk_tier} risk - ${Math.round(burnoutScoreResult.confidence * 100)}% confidence`
+                  : 'Sync metrics to calculate risk'}
+              </Text>
+            </View>
+            <Pill label={burnoutScoreResult?.risk_tier ?? 'pending'} tone={burnoutScoreResult ? 'warning' : 'neutral'} />
+          </View>
         </SectionCard>
 
         <SectionCard title="Merge timeline" subtitle="How the app handles each sync." accent="warning">
@@ -303,6 +322,21 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 12,
     marginTop: 8,
+  },
+  scoreMeta: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  scoreRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  scoreValue: {
+    color: COLORS.text,
+    fontSize: 32,
+    fontWeight: '900',
   },
   timelineRow: {
     gap: 10,

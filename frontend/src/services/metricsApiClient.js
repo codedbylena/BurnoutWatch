@@ -53,6 +53,33 @@ function createMetricsApiClient({
 
       return request(`/metrics/daily-summaries?${query.toString()}`);
     },
+
+    async getBurnoutScore(workerId, startDate, endDate, options = {}) {
+      const query = new URLSearchParams({
+        worker_id: workerId,
+        start_date: startDate,
+        end_date: endDate,
+      });
+      if (options.facialFatigueScore !== undefined && options.facialFatigueScore !== null) {
+        query.set('facial_fatigue_score', String(options.facialFatigueScore));
+      }
+
+      return request(`/scoring/burnout?${query.toString()}`);
+    },
+
+    async analyzeFaceScanAndScore(workerId, startDate, endDate, photoPayload = {}) {
+      return request('/ml/facial-fatigue/analyze-photo', {
+        method: 'POST',
+        body: JSON.stringify({
+          worker_id: workerId,
+          start_date: startDate,
+          end_date: endDate,
+          width: photoPayload.width ?? 1080,
+          height: photoPayload.height ?? 1920,
+          file_size_bytes: photoPayload.fileSizeBytes ?? null,
+        }),
+      });
+    },
   };
 }
 

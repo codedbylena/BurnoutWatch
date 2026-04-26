@@ -2,7 +2,7 @@
 
 ## Scope
 
-This pass defines ingestion and retrieval for normalized daily metric summaries. It does not calculate burnout scores yet.
+This pass defines ingestion, retrieval, and deterministic burnout scoring for normalized daily metric summaries.
 
 ## Endpoints
 
@@ -82,6 +82,34 @@ Response shape:
 ### `GET /metrics/daily-summaries?worker_id=&start_date=&end_date=`
 
 Returns canonical per-day summaries after merge precedence has been applied.
+
+### `GET /scoring/burnout?worker_id=&start_date=&end_date=`
+
+Returns the aggregate burnout score for canonical summaries in the requested date range.
+
+Response shape:
+
+```json
+{
+  "worker_id": "worker-123",
+  "start_date": "2026-04-20",
+  "end_date": "2026-04-26",
+  "days_used": 7,
+  "burnout_score": 46.64,
+  "risk_tier": "moderate",
+  "confidence": 0.5875,
+  "contributors": [
+    {
+      "metric": "sleep_duration_hours",
+      "direction": "risk_increasing",
+      "contribution": 14.76,
+      "explanation": "Sleep duration was outside the target recovery range."
+    }
+  ]
+}
+```
+
+Returns `422` when no usable scoring inputs exist in the requested date range.
 
 ## Public Types
 

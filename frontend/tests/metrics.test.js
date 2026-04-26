@@ -69,6 +69,25 @@ test('HealthConnect normalizer handles missing stage detail as null sleep qualit
   assert.equal(summary.step_count, 9033);
 });
 
+test('HealthConnect normalizer maps sleep quality proxy from adapter records', () => {
+  const summary = normalizeHealthConnectDailyRecord(
+    'worker-android',
+    {
+      localDate: '2026-04-26',
+      sourceRecordedAt: '2026-04-26T21:00:00Z',
+      sleepDurationHours: 7.25,
+      sleepQualityProxy: 0.3333,
+    },
+    {
+      sleep_duration_hours: 'granted',
+      sleep_quality_proxy: 'granted',
+    }
+  );
+
+  assert.equal(summary.sleep_quality_proxy, 0.3333);
+  assert.equal(summary.availability.sleep_quality_proxy, 'present');
+});
+
 test('permission denied and unavailable metrics return partial summaries without throwing', () => {
   const summary = normalizeHealthKitDailyRecord(
     'worker-partial',
