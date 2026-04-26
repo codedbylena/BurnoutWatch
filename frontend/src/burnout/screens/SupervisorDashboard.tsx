@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { LogOut, Users, AlertCircle, Heart } from 'lucide-react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface SupervisorDashboardProps {
   onLogout: () => void;
