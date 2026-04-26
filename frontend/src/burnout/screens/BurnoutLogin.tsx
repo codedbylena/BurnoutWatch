@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface BurnoutLoginProps {
   onLogin: (role: string) => void;
