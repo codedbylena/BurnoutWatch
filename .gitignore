@@ -50,3 +50,4 @@ temp/
 .npm/
 .yarn/
 .pnpm-store/
+.expo/

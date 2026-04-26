@@ -71,3 +71,18 @@ test('demo api client preserves device precedence when manual summary is added',
   assert.ok(['low', 'moderate', 'high'].includes(faceScan.burnout_score.risk_tier));
   assert.ok(faceScan.burnout_score.contributors.some((item) => item.metric === 'facial_fatigue_score'));
 });
+
+test('demo api client returns facial fatigue and burnout score without backend data', async () => {
+  const metricsApiClient = createDemoMetricsApiClient();
+
+  const faceScan = await metricsApiClient.analyzeFaceScanAndScore(
+    'worker-demo',
+    '2026-04-20',
+    '2026-04-26',
+    { width: 500, height: 500, fileSizeBytes: 100000 }
+  );
+
+  assert.equal(faceScan.facial_fatigue.risk_tier, 'high');
+  assert.equal(faceScan.burnout_score.burnout_score, faceScan.facial_fatigue.score);
+  assert.equal(faceScan.burnout_score.risk_tier, 'high');
+});

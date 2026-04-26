@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
-import { BurnoutLogin } from '../components/BurnoutLogin';
-import { BurnoutStatusCheck } from '../components/BurnoutStatusCheck';
-import { BurnoutDashboard } from '../components/BurnoutDashboard';
-import { SupervisorDashboard } from '../components/SupervisorDashboard';
-import { BurnoutCheckInPrep } from '../components/BurnoutCheckInPrep';
-import { BurnoutQuestionnaire } from '../components/BurnoutQuestionnaire';
-import { BurnoutCameraAccess } from '../components/BurnoutCameraAccess';
+import { BurnoutLogin } from '../screens/BurnoutLogin';
+import { BurnoutStatusCheck } from '../screens/BurnoutStatusCheck';
+import { BurnoutDashboard } from '../screens/BurnoutDashboard';
+import { SupervisorDashboard } from '../screens/SupervisorDashboard';
+import { BurnoutCheckInPrep } from '../screens/BurnoutCheckInPrep';
+import { BurnoutQuestionnaire } from '../screens/BurnoutQuestionnaire';
+import { BurnoutCameraAccess } from '../screens/BurnoutCameraAccess';
+
+const { buildRecentDateRange } = require('../../metrics/dateUtils');
+const { createMetricsApiClient } = require('../../services/metricsApiClient');
+const { createDemoMetricsApiClient } = require('../../services/demoMetricsApiClient');
+const { isDemoModeEnabled } = require('../../services/demoMode');
+
+const DEMO_WORKER_NAME = 'Magdalena';
+const DEMO_SUPERVISOR_NAME = 'Dipan';
+const DEMO_HIGH_RISK_SCORE = 82;
 
 type AppState =
   | 'login'
@@ -19,18 +29,76 @@ type AppState =
 
 export default function AppFlow() {
   const [appState, setAppState] = useState<AppState>('login');
-  const [userRole, setUserRole] = useState('');
+  const [workerId] = useState('worker-demo');
+  const [burnoutScoreResult, setBurnoutScoreResult] = useState<any>(null);
+  const [faceScanResult, setFaceScanResult] = useState<any>(null);
+  const [faceScanError, setFaceScanError] = useState('');
+  const [isAnalyzingFaceScan, setIsAnalyzingFaceScan] = useState(false);
+  const demoMode = isDemoModeEnabled();
+  const metricsApiClient = useMemo(
+    () =>
+      demoMode
+        ? createDemoMetricsApiClient()
+        : createMetricsApiClient({ platform: Platform.OS }),
+    [demoMode]
+  );
+
+  function normalizeDemoResult(result: any) {
+    if (!demoMode || result?.burnout_score?.risk_tier === 'high') {
+      return result;
+    }
+
+    return {
+      ...result,
+      facial_fatigue: {
+        ...(result?.facial_fatigue ?? {}),
+        score: Math.max(result?.facial_fatigue?.score ?? 0, 74),
+        risk_tier: 'high',
+      },
+      burnout_score: {
+        ...(result?.burnout_score ?? {}),
+        worker_id: workerId,
+        burnout_score: Math.max(result?.burnout_score?.burnout_score ?? 0, DEMO_HIGH_RISK_SCORE),
+        risk_tier: 'high',
+      },
+    };
+  }
+
+  async function handleAnalyzeFaceScan(photoPayload: any) {
+    setFaceScanError('');
+    setIsAnalyzingFaceScan(true);
+    setAppState('statusCheck');
+
+    try {
+      const { startDate, endDate } = buildRecentDateRange(7);
+      const result = await metricsApiClient.analyzeFaceScanAndScore(
+        workerId,
+        startDate,
+        endDate,
+        photoPayload
+      );
+
+      const displayResult = normalizeDemoResult(result);
+      setFaceScanResult(displayResult);
+      setBurnoutScoreResult(displayResult.burnout_score);
+      return displayResult;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown face scan error';
+      setFaceScanError(`Face scan failed: ${message}`);
+      return null;
+    } finally {
+      setIsAnalyzingFaceScan(false);
+    }
+  }
 
   if (appState === 'login') {
     return (
       <BurnoutLogin
         onLogin={(role: string) => {
-          setUserRole(role);
-
           if (role === 'Supervisor') {
             setAppState('supervisorDashboard');
           } else {
-            setAppState('statusCheck');
+            setAppState('dashboard');
           }
         }}
       />
@@ -38,11 +106,27 @@ export default function AppFlow() {
   }
 
   if (appState === 'statusCheck') {
-    return <BurnoutStatusCheck onComplete={() => setAppState('dashboard')} />;
+    return (
+      <BurnoutStatusCheck
+        isAnalyzing={isAnalyzingFaceScan}
+        errorMessage={faceScanError}
+        onRetry={() => setAppState('cameraAccess')}
+        onSkip={() => setAppState('dashboard')}
+        onComplete={() => setAppState('dashboard')}
+      />
+    );
   }
 
   if (appState === 'supervisorDashboard') {
-    return <SupervisorDashboard onLogout={() => setAppState('login')} />;
+    return (
+      <SupervisorDashboard
+        supervisorName={DEMO_SUPERVISOR_NAME}
+        workerName={DEMO_WORKER_NAME}
+        burnoutScoreResult={burnoutScoreResult}
+        faceScanResult={faceScanResult}
+        onLogout={() => setAppState('login')}
+      />
+    );
   }
 
   if (appState === 'checkInPrep') {
@@ -61,7 +145,8 @@ export default function AppFlow() {
   if (appState === 'cameraAccess') {
     return (
       <BurnoutCameraAccess
-        onComplete={() => setAppState('dashboard')}
+        onAnalyzeFaceScan={handleAnalyzeFaceScan}
+        onSkip={() => setAppState('dashboard')}
         onBack={() => setAppState('questionnaire')}
       />
     );
@@ -69,6 +154,9 @@ export default function AppFlow() {
 
   return (
     <BurnoutDashboard
+      workerName={DEMO_WORKER_NAME}
+      burnoutScoreResult={burnoutScoreResult}
+      faceScanResult={faceScanResult}
       onStartCheckIn={() => setAppState('checkInPrep')}
       onLogout={() => setAppState('login')}
     />

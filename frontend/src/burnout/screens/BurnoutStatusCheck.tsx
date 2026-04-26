@@ -6,23 +6,41 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  TouchableOpacity,
 } from 'react-native';
 
 interface BurnoutStatusCheckProps {
   onComplete: () => void;
+  isAnalyzing?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
+  onSkip?: () => void;
 }
 
-export function BurnoutStatusCheck({ onComplete }: BurnoutStatusCheckProps) {
+export function BurnoutStatusCheck({
+  onComplete,
+  isAnalyzing = false,
+  errorMessage = '',
+  onRetry,
+  onSkip,
+}: BurnoutStatusCheckProps) {
   const [progress, setProgress] = useState(0);
 
   const spin = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Progress logic
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
+        if (errorMessage) {
+          return prev;
+        }
+
+        if (isAnalyzing && prev >= 94) {
+          return 94;
+        }
+
+        if (!isAnalyzing && prev >= 100) {
           clearInterval(interval);
           setTimeout(onComplete, 300);
           return 100;
@@ -31,18 +49,20 @@ export function BurnoutStatusCheck({ onComplete }: BurnoutStatusCheckProps) {
       });
     }, 30);
 
-    // Spin animation
-    Animated.loop(
+    return () => clearInterval(interval);
+  }, [errorMessage, isAnalyzing, onComplete]);
+
+  useEffect(() => {
+    const spinAnimation = Animated.loop(
       Animated.timing(spin, {
         toValue: 1,
         duration: 1200,
         easing: Easing.linear,
         useNativeDriver: true,
       })
-    ).start();
+    );
 
-    // Pulse animation
-    Animated.loop(
+    const pulseAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
           toValue: 1.2,
@@ -55,10 +75,16 @@ export function BurnoutStatusCheck({ onComplete }: BurnoutStatusCheckProps) {
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
 
-    return () => clearInterval(interval);
-  }, []);
+    spinAnimation.start();
+    pulseAnimation.start();
+
+    return () => {
+      spinAnimation.stop();
+      pulseAnimation.stop();
+    };
+  }, [pulse, spin]);
 
   const spinInterpolate = spin.interpolate({
     inputRange: [0, 1],
@@ -94,8 +120,25 @@ export function BurnoutStatusCheck({ onComplete }: BurnoutStatusCheckProps) {
 
         {/* Text */}
         <Text style={styles.title}>
-          Getting things ready for you…
+          Analyzing face scan
         </Text>
+        <Text style={styles.subtitle}>
+          {errorMessage ? 'We could not update your score from the scan.' : 'Updating your burnout score'}
+        </Text>
+
+        {errorMessage ? (
+          <>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+            <View style={styles.actionRow}>
+              <TouchableOpacity onPress={onRetry ?? onComplete} style={styles.retryButton}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onSkip ?? onComplete} style={styles.skipButton}>
+                <Text style={styles.skipText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
 
         {/* Optional progress display */}
         <Text style={styles.progress}>{progress}%</Text>
@@ -146,10 +189,50 @@ const styles = StyleSheet.create({
     fontSize: 20,
     textAlign: 'center',
   },
+  subtitle: {
+    marginTop: 8,
+    color: '#FFFFFF',
+    fontSize: 14,
+    opacity: 0.82,
+    textAlign: 'center',
+  },
   progress: {
     marginTop: 10,
     color: '#FFFFFF',
     fontSize: 14,
     opacity: 0.8,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    opacity: 0.9,
+    marginTop: 12,
+    textAlign: 'center',
+    maxWidth: 300,
+    lineHeight: 18,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  retryButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: '#2C3E50',
+    fontWeight: '600',
+  },
+  skipButton: {
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  skipText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

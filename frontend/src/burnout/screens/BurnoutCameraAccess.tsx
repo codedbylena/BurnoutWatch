@@ -1,21 +1,62 @@
 import { ArrowLeft, Camera } from 'lucide-react-native';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 
 interface BurnoutCameraAccessProps {
-  onComplete: () => void;
+  onAnalyzeFaceScan: (photoPayload: {
+    width?: number;
+    height?: number;
+    fileSizeBytes?: number | null;
+    uri?: string;
+  }) => void;
+  onSkip: () => void;
   onBack: () => void;
 }
 
 export function BurnoutCameraAccess({
-  onComplete,
+  onAnalyzeFaceScan,
+  onSkip,
   onBack,
 }: BurnoutCameraAccessProps) {
-  const handleCameraPermission = (granted: boolean) => {
-    if (granted) {
-      // Later: request real camera permission here
-    }
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-    onComplete();
+  const handleCameraPermission = async () => {
+    setErrorMessage('');
+    setIsAnalyzing(true);
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setErrorMessage('Camera permission was not granted. You can retry or skip this scan.');
+        return;
+      }
+
+      const capture = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.7,
+      });
+
+      if (capture.canceled) {
+        setErrorMessage('Photo capture was cancelled. You can retry or skip this scan.');
+        return;
+      }
+
+      const asset = capture.assets?.[0] ?? {};
+      onAnalyzeFaceScan({
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+        fileSizeBytes: asset.fileSize ?? null,
+      });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown camera error';
+      setErrorMessage(`Face scan failed: ${message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -39,20 +80,28 @@ export function BurnoutCameraAccess({
 
           <View style={styles.buttonGroup}>
             <TouchableOpacity
-              onPress={() => handleCameraPermission(true)}
-              style={styles.primaryButton}
+              onPress={handleCameraPermission}
+              disabled={isAnalyzing}
+              style={[styles.primaryButton, isAnalyzing && styles.disabledButton]}
             >
               <Camera size={20} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Allow Camera Access</Text>
+              <Text style={styles.primaryButtonText}>
+                {isAnalyzing ? 'Analyzing face scan...' : 'Allow Camera Access'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => handleCameraPermission(false)}
+              onPress={onSkip}
+              disabled={isAnalyzing}
               style={styles.secondaryButton}
             >
               <Text style={styles.secondaryButtonText}>Skip for now</Text>
             </TouchableOpacity>
           </View>
+
+          {errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : null}
 
           <Text style={styles.privacyText}>
             Your privacy matters. Images are processed securely and never stored.
@@ -128,6 +177,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
+  disabledButton: {
+    opacity: 0.7,
+  },
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
@@ -147,6 +199,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginTop: 24,
+    lineHeight: 18,
+  },
+  errorText: {
+    color: '#B45309',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 16,
     lineHeight: 18,
   },
 });

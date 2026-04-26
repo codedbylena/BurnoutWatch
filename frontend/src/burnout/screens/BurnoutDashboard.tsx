@@ -7,29 +7,34 @@ import {
 } from 'react-native';
 import { Heart, LogOut } from 'lucide-react-native';
 
+const { buildDashboardStatus } = require('../dashboardStatus');
+
 interface BurnoutDashboardProps {
   onStartCheckIn: () => void;
   onLogout: () => void;
+  workerName?: string;
+  burnoutScoreResult?: {
+    burnout_score?: number;
+    risk_tier?: string;
+  } | null;
+  faceScanResult?: {
+    facial_fatigue?: {
+      risk_tier?: string;
+    };
+  } | null;
 }
 
 export function BurnoutDashboard({
   onStartCheckIn,
   onLogout,
+  workerName = 'Magdalena',
+  burnoutScoreResult,
+  faceScanResult,
 }: BurnoutDashboardProps) {
-  const currentStatus = 'Moderate';
-  const lastCheckIn = 'Yesterday, 9:30 AM';
+  const lastCheckIn = faceScanResult ? 'Just now' : 'Awaiting today';
   const [percentage, setPercentage] = useState(0);
 
-  const getStatus = () => {
-    return {
-      text: "You're doing okay today 💛",
-      recommendation: 'Try to get 8 hours of sleep tonight',
-      percentage: 55,
-      color: '#6FAFB5',
-    };
-  };
-
-  const status = getStatus();
+  const status = buildDashboardStatus(burnoutScoreResult, faceScanResult);
 
   useEffect(() => {
     let current = 0;
@@ -44,7 +49,7 @@ export function BurnoutDashboard({
     }, 50);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [status.percentage]);
 
   return (
     <View style={styles.screen}>
@@ -57,7 +62,7 @@ export function BurnoutDashboard({
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Hey Jon, let’s check in</Text>
+        <Text style={styles.title}>Hey {workerName}, let’s check in</Text>
         <Text style={styles.subtitle}>Here’s how you're doing</Text>
       </View>
 
@@ -66,7 +71,7 @@ export function BurnoutDashboard({
         
         {/* Status */}
         <Text style={[styles.statusText, { color: status.color }]}>
-          {currentStatus}
+          {status.currentStatus}
         </Text>
 
         <Text style={styles.percentage}>{percentage}%</Text>
