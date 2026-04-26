@@ -2,6 +2,11 @@
   "expo": {
     "name": "BurnoutWatch",
     "slug": "burnoutwatch",
+    "splash": {
+      "image": "./asset/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "plugins": [
       "expo-secure-store",
       [
