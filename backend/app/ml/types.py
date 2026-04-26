@@ -1,7 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import asdict, dataclass, field
+from typing import Any, Literal
+
+
+RiskTier = Literal["low", "moderate", "high"]
+RawModelOutputs = dict[str, dict[str, float]]
+
+
+def _rounded_dataclass_values(value: object) -> dict[str, float]:
+    return {key: round(float(item), 4) for key, item in asdict(value).items()}
 
 
 @dataclass(frozen=True)
@@ -37,6 +45,9 @@ class FaceLandmarkOutput:
     scan_quality: float
     confidence: float
 
+    def as_dict(self) -> dict[str, float]:
+        return _rounded_dataclass_values(self)
+
 
 @dataclass(frozen=True)
 class ExpressionOutput:
@@ -48,6 +59,9 @@ class ExpressionOutput:
     expression_variance: float
     confidence: float
 
+    def as_dict(self) -> dict[str, float]:
+        return _rounded_dataclass_values(self)
+
 
 @dataclass(frozen=True)
 class FatigueSignals:
@@ -58,12 +72,25 @@ class FatigueSignals:
     scan_quality: float
     confidence: float
 
+    def as_dict(self) -> dict[str, float]:
+        return _rounded_dataclass_values(self)
+
 
 @dataclass(frozen=True)
 class FacialFatigueResult:
     score: float
+    risk_tier: RiskTier
     signals: FatigueSignals
-    landmark_output: FaceLandmarkOutput
-    expression_output: ExpressionOutput
+    raw_outputs: RawModelOutputs
     confidence: float
     explanation: list[str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "score": self.score,
+            "risk_tier": self.risk_tier,
+            "signals": self.signals.as_dict(),
+            "raw_outputs": self.raw_outputs,
+            "confidence": self.confidence,
+            "explanation": list(self.explanation),
+        }
