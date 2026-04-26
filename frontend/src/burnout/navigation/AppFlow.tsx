@@ -12,11 +12,13 @@ import { BurnoutCameraAccess } from '../screens/BurnoutCameraAccess';
 const { buildRecentDateRange } = require('../../metrics/dateUtils');
 const { createMetricsApiClient } = require('../../services/metricsApiClient');
 const { createDemoMetricsApiClient } = require('../../services/demoMetricsApiClient');
-const { isDemoModeEnabled } = require('../../services/demoMode');
 
 const DEMO_WORKER_NAME = 'Magdalena';
 const DEMO_SUPERVISOR_NAME = 'Dipan';
 const DEMO_HIGH_RISK_SCORE = 82;
+
+// Check for demo mode - check both runtime and build-time env vars
+const isDemo = process.env.EXPO_PUBLIC_DEMO_MODE === '1' || process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 type AppState =
   | 'login'
@@ -34,7 +36,7 @@ export default function AppFlow() {
   const [faceScanResult, setFaceScanResult] = useState<any>(null);
   const [faceScanError, setFaceScanError] = useState('');
   const [isAnalyzingFaceScan, setIsAnalyzingFaceScan] = useState(false);
-  const demoMode = isDemoModeEnabled();
+  const demoMode = isDemo;
   const metricsApiClient = useMemo(
     () =>
       demoMode
