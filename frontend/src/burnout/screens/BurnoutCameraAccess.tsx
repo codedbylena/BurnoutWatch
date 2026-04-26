@@ -1,5 +1,6 @@
 import { ArrowLeft, Camera } from 'lucide-react-native';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface BurnoutCameraAccessProps {
   onComplete: () => void;
