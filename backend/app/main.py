@@ -6,6 +6,13 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
 
 from .config import Settings, get_settings
+from .llm import (
+    HuggingFaceClient,
+    MockRuleBasedClient,
+    RecommendationContext,
+    RecommendationResult,
+    RecommendationService,
+)
 from .metrics import (
     DailyMetricSummary,
     MetricsIngestRequest,
@@ -28,6 +35,24 @@ def get_metrics_service() -> MetricsService:
     settings: Settings = get_settings()
     repository = MetricsRepository(settings.sqlite_db_path)
     return MetricsService(repository)
+
+
+@lru_cache(maxsize=1)
+def get_recommendation_service() -> RecommendationService:
+    settings: Settings = get_settings()
+    fallback_client = MockRuleBasedClient()
+
+    if settings.llm_provider.lower() == "huggingface":
+        primary_client = HuggingFaceClient(
+            api_token=settings.hf_api_token,
+            model=settings.llm_model,
+            api_base_url=settings.hf_api_base_url,
+            timeout_seconds=settings.llm_timeout_seconds,
+        )
+    else:
+        primary_client = fallback_client
+
+    return RecommendationService(primary_client=primary_client, fallback_client=fallback_client)
 
 
 app = FastAPI(
@@ -115,3 +140,11 @@ def analyze_facial_fatigue_photo(
         facial_fatigue=facial_payload,
         burnout_score=burnout_score,
     )
+
+
+@app.post("/recommendations/generate", response_model=RecommendationResult)
+def generate_recommendations(
+    context: RecommendationContext,
+    service: RecommendationService = Depends(get_recommendation_service),
+) -> RecommendationResult:
+    return service.generate(context)

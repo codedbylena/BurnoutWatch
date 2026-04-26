@@ -15,7 +15,7 @@ Phone/watch API + manual metrics
   -> RecommendationService
       -> MockRuleBasedClient default
       -> OllamaGemmaClient optional local LLM
-      -> HuggingFaceClient future optional
+      -> HuggingFaceClient optional hosted LLM
   -> RecommendationResult
 ```
 
@@ -60,19 +60,21 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 Use Ollama for the local Gemma path because it is free after setup and avoids demo-time API quotas. A larger Gemma model can be used if the presentation laptop handles it reliably, but `gemma3:1b` is the safest default for speed.
 
-Future hosted provider:
+Optional hosted provider:
 
 ```env
 LLM_PROVIDER=huggingface
+LLM_MODEL=google/gemma-2-2b-it
+HF_API_TOKEN=your_hugging_face_token
 ```
 
-Keep Hugging Face as an optional future adapter, not the presentation default. Hosted free tiers can have quota, availability, cold-start, or network issues.
+Keep Hugging Face Gemma as an optional adapter, not the presentation default. Hosted free tiers can have quota, availability, cold-start, model access, or network issues, so the backend falls back to the mock provider if the hosted call is unavailable.
 
 ## Planned Files
 
 Use the existing placeholders in this directory:
 
-- `llm_client.py`: define the provider interface and implement `MockRuleBasedClient` and `OllamaGemmaClient`.
+- `llm_client.py`: define the provider interface and implement `MockRuleBasedClient` and `HuggingFaceClient`.
 - `prompt_templates.py`: build the Gemma prompt and JSON schema instructions.
 - `recommendation_generator.py`: convert score output into `RecommendationContext`, call the selected client, validate output, and apply safety filters.
 - `safety_filters.py`: reject or rewrite unsafe recommendation text.
@@ -250,7 +252,7 @@ Only switch to `ollama` if the model has already been pulled, the laptop is fast
 ## Implementation Notes
 
 - Validate LLM output with Pydantic before returning it from the API.
-- If Ollama is unavailable, malformed, or times out, fall back to `MockRuleBasedClient`.
+- If Hugging Face is unavailable, malformed, missing credentials, or times out, fall back to `MockRuleBasedClient`.
 - Set a short timeout for local LLM calls, such as 5-10 seconds.
 - Store generated recommendation metadata, not raw prompts, unless the team explicitly decides to persist prompts for debugging.
 - Do not send raw images, raw face frames, credentials, or private notes to any hosted provider.

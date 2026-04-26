@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -29,12 +30,12 @@ class MetricsRepository:
         return connection
 
     def initialize(self) -> None:
-        with self.connect() as connection:
-            connection.execute(CREATE_TABLE_SQL)
-            connection.commit()
+        with closing(self.connect()) as connection:
+            with connection:
+                connection.execute(CREATE_TABLE_SQL)
 
     def get_summary(self, worker_id: str, local_date: str) -> dict | None:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             row = connection.execute(
                 """
                 SELECT canonical_json
@@ -48,32 +49,32 @@ class MetricsRepository:
         return json.loads(row["canonical_json"])
 
     def upsert_summary(self, summary: dict) -> None:
-        with self.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO daily_metric_summaries (
-                    worker_id,
-                    local_date,
-                    canonical_json,
-                    created_at,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(worker_id, local_date) DO UPDATE SET
-                    canonical_json = excluded.canonical_json,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    summary["worker_id"],
-                    summary["local_date"],
-                    json.dumps(summary, sort_keys=True),
-                    summary["ingested_at"],
-                    summary["ingested_at"],
-                ),
-            )
-            connection.commit()
+        with closing(self.connect()) as connection:
+            with connection:
+                connection.execute(
+                    """
+                    INSERT INTO daily_metric_summaries (
+                        worker_id,
+                        local_date,
+                        canonical_json,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(worker_id, local_date) DO UPDATE SET
+                        canonical_json = excluded.canonical_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        summary["worker_id"],
+                        summary["local_date"],
+                        json.dumps(summary, sort_keys=True),
+                        summary["ingested_at"],
+                        summary["ingested_at"],
+                    ),
+                )
 
     def list_summaries(self, worker_id: str, start_date: str, end_date: str) -> list[dict]:
-        with self.connect() as connection:
+        with closing(self.connect()) as connection:
             rows = connection.execute(
                 """
                 SELECT canonical_json
