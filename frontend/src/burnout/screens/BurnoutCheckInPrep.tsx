@@ -1,6 +1,7 @@
 import { Heart } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface BurnoutCheckInPrepProps {
   onComplete: () => void;
