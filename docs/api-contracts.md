@@ -83,6 +83,71 @@ Response shape:
 
 Returns canonical per-day summaries after merge precedence has been applied.
 
+### `POST /recommendations/generate`
+
+Accepts an already-computed burnout score context and returns safe worker-facing recommendation cards. This endpoint does not calculate or change the burnout score.
+
+Request shape:
+
+```json
+{
+  "worker_id": "worker-123",
+  "local_date": "2026-04-26",
+  "burnout_score": 68.4,
+  "risk_tier": "high",
+  "confidence": 0.82,
+  "data_completeness": "partial",
+  "top_contributors": [
+    {
+      "name": "sleep_duration_hours",
+      "value": 4.8,
+      "direction": "risk_increasing",
+      "explanation": "Sleep was below the recovery target."
+    }
+  ],
+  "daily_metrics": {
+    "sleep_duration_hours": 4.8,
+    "overtime_hours": 3.5
+  }
+}
+```
+
+Response shape:
+
+```json
+{
+  "worker_id": "worker-123",
+  "local_date": "2026-04-26",
+  "risk_tier": "high",
+  "summary": "Your current burnout risk is high based on elevated strain and reduced recovery signals.",
+  "recommendations": [
+    {
+      "title": "Prioritize recovery before the next shift",
+      "detail": "If possible, protect a longer sleep window and avoid taking extra overtime today.",
+      "category": "recovery",
+      "priority": "high"
+    }
+  ],
+  "safety_note": "This is a wellness recommendation, not a medical diagnosis.",
+  "generated_by": "mock",
+  "generated_at": "2026-04-26T12:00:00Z"
+}
+```
+
+Demo configuration:
+
+```bash
+LLM_PROVIDER=mock
+```
+
+Optional Hugging Face configuration:
+
+```bash
+LLM_PROVIDER=huggingface
+LLM_MODEL=HuggingFaceTB/SmolLM2-360M-Instruct
+HF_API_TOKEN=your_hugging_face_token
+```
+
 ## Public Types
 
 ### `DailyMetricSummary`
