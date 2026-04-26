@@ -6,6 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Heart, LogOut } from 'lucide-react-native';
+import { colors, spacing, radius } from '../theme/burnoutTheme';
 
 interface BurnoutDashboardProps {
   onStartCheckIn: () => void;
