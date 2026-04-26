@@ -1,32 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Platform, SafeAreaView, StatusBar, StyleSheet, View } from 'react-native';
 
 const { createHealthIngestionService } = require('./src/metrics/healthIngestionService');
 const { createMetricsApiClient } = require('./src/services/metricsApiClient');
 const { createMetricsSyncService } = require('./src/services/metricsSyncService');
 const { createWorkerIdentityStore } = require('./src/services/workerIdentityStore');
+const { DeviceMetricOverviewScreen } = require('./src/screens/DeviceMetricOverviewScreen');
+const { DeviceMetricReadinessScreen } = require('./src/screens/DeviceMetricReadinessScreen');
+const { DeviceMetricManualScreen } = require('./src/screens/DeviceMetricManualScreen');
+const {
+  DeviceMetricManualEntryScreen,
+  createDefaultManualForm,
+} = require('./src/screens/DeviceMetricManualEntryScreen');
+const {
+  BurnoutCheckInPrepScreen,
+  BurnoutCheckInScreen,
+  BurnoutDashboardScreen,
+  BurnoutLoginScreen,
+  BurnoutStatusCheckScreen,
+} = require('./src/screens/BurnoutFlowScreens');
+const { buildManualSummary } = require('./src/metrics/manualEntry');
 
 const workerIdentityStore = createWorkerIdentityStore();
-
-function MetricRow({ label, value }) {
-  return (
-    <View style={styles.metricRow}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-    </View>
-  );
-}
+const SCREEN_TABS = [
+  { label: 'Dashboard', value: 'dashboard' },
+  { label: 'Overview', value: 'overview' },
+  { label: 'Readiness', value: 'readiness' },
+  { label: 'Manual', value: 'manual' },
+];
 
 export default function App() {
   const [workerId, setWorkerId] = useState('');
@@ -34,7 +35,11 @@ export default function App() {
   const [permissions, setPermissions] = useState(null);
   const [statusMessage, setStatusMessage] = useState('Load a development build, set a worker ID, then sync.');
   const [syncState, setSyncState] = useState({ loading: true, syncing: false, requesting: false });
+  const [manualSubmitState, setManualSubmitState] = useState({ submitting: false, error: null });
   const [canonicalSummaries, setCanonicalSummaries] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [appRoute, setAppRoute] = useState('login');
+  const [manualForm, setManualForm] = useState(createDefaultManualForm());
 
   const healthIngestionService = useMemo(() => createHealthIngestionService(), []);
   const metricsApiClient = useMemo(() => createMetricsApiClient({ platform: Platform.OS }), []);
@@ -106,6 +111,7 @@ export default function App() {
       const grantedPermissions = await healthIngestionService.requestPermissions();
       setPermissions(grantedPermissions);
       setStatusMessage('Permissions requested. Review per-metric results below.');
+      setActiveTab('readiness');
     } catch (error) {
       setStatusMessage(`Permission request failed: ${error.message}`);
     } finally {
@@ -128,6 +134,7 @@ export default function App() {
       setStatusMessage(
         `Synced ${syncResult.ingestResponse.ingested_count} summaries from ${syncResult.startDate} to ${syncResult.endDate} using ${metricsApiClient.baseUrl}.`
       );
+      setActiveTab('overview');
     } catch (error) {
       setStatusMessage(`Sync failed: ${error.message}`);
     } finally {
@@ -135,249 +142,133 @@ export default function App() {
     }
   }
 
-  const availabilityRows = availability?.metrics
-    ? Object.entries(availability.metrics).map(([metric, value]) => (
-        <MetricRow key={`availability-${metric}`} label={metric} value={value} />
-      ))
-    : null;
+  async function handleSubmitManualEntry(manualInput) {
+    const persistedWorkerId = await persistWorkerId(workerId);
+    if (!persistedWorkerId) {
+      setManualSubmitState({ submitting: false, error: 'Enter a worker ID before saving manual metrics.' });
+      return;
+    }
 
-  const permissionRows = permissions
-    ? Object.entries(permissions).map(([metric, value]) => (
-        <MetricRow key={`permission-${metric}`} label={metric} value={value} />
-      ))
-    : null;
+    setManualSubmitState({ submitting: true, error: null });
+
+    try {
+      const summary = buildManualSummary(
+        persistedWorkerId,
+        manualForm.localDate,
+        manualInput,
+        new Date().toISOString()
+      );
+      const ingestResponse = await metricsApiClient.ingestSummaries([summary]);
+      const canonicalForDay = await metricsApiClient.getDailySummaries(
+        persistedWorkerId,
+        manualForm.localDate,
+        manualForm.localDate
+      );
+
+      setCanonicalSummaries((current) => {
+        const withoutUpdatedDay = current.filter((item) => item.local_date !== manualForm.localDate);
+        return [...canonicalForDay, ...withoutUpdatedDay].sort((a, b) =>
+          b.local_date.localeCompare(a.local_date)
+        );
+      });
+      setStatusMessage(
+        `Saved ${ingestResponse.ingested_count} manual summary for ${manualForm.localDate}.`
+      );
+      setManualForm(createDefaultManualForm());
+      setAppRoute('deviceMetrics');
+      setActiveTab('manual');
+    } catch (error) {
+      setManualSubmitState({ submitting: false, error: `Manual save failed: ${error.message}` });
+      return;
+    }
+
+    setManualSubmitState({ submitting: false, error: null });
+  }
+
+  function handleTabChange(nextTab) {
+    if (nextTab === 'dashboard') {
+      setAppRoute('dashboard');
+      return;
+    }
+
+    setAppRoute('deviceMetrics');
+    setActiveTab(nextTab);
+  }
+
+  const sharedProps = {
+    workerId,
+    onWorkerIdChange: setWorkerId,
+    onRequestPermissions: handleRequestPermissions,
+    onSync: handleSync,
+    syncState,
+    metricsApiClient,
+    statusMessage,
+    availability,
+    permissions,
+    canonicalSummaries,
+    manualSubmitState,
+    tabs: SCREEN_TABS,
+    activeTab: activeTab === 'manualEntry' ? 'manual' : activeTab,
+    onTabChange: handleTabChange,
+  };
+
+  let screen;
+  if (appRoute === 'login') {
+    screen = <BurnoutLoginScreen onLogin={() => setAppRoute('dashboard')} />;
+  } else if (appRoute === 'dashboard') {
+    screen = (
+      <BurnoutDashboardScreen
+        onOpenDeviceSync={() => {
+          setActiveTab('overview');
+          setAppRoute('deviceMetrics');
+        }}
+        onStartCheckIn={() => setAppRoute('checkInPrep')}
+      />
+    );
+  } else if (appRoute === 'checkInPrep') {
+    screen = <BurnoutCheckInPrepScreen onComplete={() => setAppRoute('checkIn')} />;
+  } else if (appRoute === 'checkIn') {
+    screen = (
+      <BurnoutCheckInScreen
+        onBack={() => setAppRoute('dashboard')}
+        onComplete={() => setAppRoute('statusCheck')}
+      />
+    );
+  } else if (appRoute === 'statusCheck') {
+    screen = <BurnoutStatusCheckScreen onComplete={() => setAppRoute('dashboard')} />;
+  } else if (activeTab === 'overview') {
+    screen = <DeviceMetricOverviewScreen {...sharedProps} />;
+  } else if (activeTab === 'readiness') {
+    screen = <DeviceMetricReadinessScreen {...sharedProps} />;
+  } else if (activeTab === 'manualEntry') {
+    screen = (
+      <DeviceMetricManualEntryScreen
+        {...sharedProps}
+        form={manualForm}
+        onChange={(patch) => setManualForm((current) => ({ ...current, ...patch }))}
+        onCancel={() => setActiveTab('manual')}
+        onSubmit={handleSubmitManualEntry}
+        submitState={manualSubmitState}
+      />
+    );
+  } else {
+    screen = <DeviceMetricManualScreen {...sharedProps} onOpenManualEntry={() => setActiveTab('manualEntry')} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>BurnoutWatch</Text>
-        <Text style={styles.title}>Device Metric Sync</Text>
-        <Text style={styles.subtitle}>
-          Reads HealthKit on iPhone or Health Connect on Android, then uploads canonical daily summaries for the scoring pipeline.
-        </Text>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Worker Identity</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setWorkerId}
-            placeholder="worker-123"
-            placeholderTextColor="#64748b"
-            style={styles.input}
-            value={workerId}
-          />
-          <Text style={styles.helper}>Stored locally on-device until real authentication exists.</Text>
-        </View>
-
-        <View style={styles.buttonRow}>
-          <Pressable
-            disabled={syncState.requesting || syncState.loading}
-            onPress={handleRequestPermissions}
-            style={({ pressed }) => [
-              styles.button,
-              styles.secondaryButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {syncState.requesting ? 'Requesting...' : 'Request Permissions'}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            disabled={syncState.syncing || syncState.loading}
-            onPress={handleSync}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          >
-            <Text style={styles.buttonText}>{syncState.syncing ? 'Syncing...' : 'Sync Last 7 Days'}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.statusCard}>
-          {syncState.loading ? <ActivityIndicator color="#0f766e" /> : null}
-          <Text style={styles.statusText}>{statusMessage}</Text>
-          <Text style={styles.helper}>API base URL: {metricsApiClient.baseUrl}</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Connector Availability</Text>
-          {availabilityRows}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Permission Results</Text>
-          {permissionRows ?? <Text style={styles.helper}>Request permissions to populate per-metric status.</Text>}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Latest Canonical Summaries</Text>
-          {canonicalSummaries.length ? (
-            canonicalSummaries.map((summary) => (
-              <View key={`${summary.worker_id}-${summary.local_date}`} style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>
-                  {summary.local_date} · {summary.source_platform}
-                </Text>
-                <MetricRow label="sleep_duration_hours" value={String(summary.sleep_duration_hours ?? 'null')} />
-                <MetricRow label="sleep_quality_proxy" value={String(summary.sleep_quality_proxy ?? 'null')} />
-                <MetricRow label="step_count" value={String(summary.step_count ?? 'null')} />
-                <MetricRow
-                  label="resting_heart_rate_bpm"
-                  value={String(summary.resting_heart_rate_bpm ?? 'null')}
-                />
-                <MetricRow
-                  label="heart_rate_variability_ms"
-                  value={String(summary.heart_rate_variability_ms ?? 'null')}
-                />
-                <MetricRow label="activity_minutes" value={String(summary.activity_minutes ?? 'null')} />
-                <MetricRow label="workout_count" value={String(summary.workout_count ?? 'null')} />
-              </View>
-            ))
-          ) : (
-            <Text style={styles.helper}>No synced summaries yet.</Text>
-          )}
-        </View>
-      </ScrollView>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.container}>{screen}</View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#f8fafc',
     flex: 1,
+    backgroundColor: '#5A9BA1',
   },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  eyebrow: {
-    color: '#0f766e',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  title: {
-    color: '#0f172a',
-    fontSize: 34,
-    fontWeight: '800',
-    marginTop: 6,
-  },
-  subtitle: {
-    color: '#334155',
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: 12,
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderColor: '#dbe4ee',
-    borderRadius: 20,
-    borderWidth: 1,
-    marginTop: 18,
-    padding: 18,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-  },
-  statusCard: {
-    alignItems: 'flex-start',
-    backgroundColor: '#ecfeff',
-    borderColor: '#99f6e4',
-    borderRadius: 18,
-    borderWidth: 1,
-    marginTop: 18,
-    padding: 16,
-  },
-  sectionTitle: {
-    color: '#0f172a',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#cbd5e1',
-    borderRadius: 14,
-    borderWidth: 1,
-    color: '#0f172a',
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  helper: {
-    color: '#475569',
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 10,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 18,
-  },
-  button: {
-    alignItems: 'center',
-    backgroundColor: '#0f766e',
-    borderRadius: 16,
+  container: {
     flex: 1,
-    paddingVertical: 15,
-  },
-  secondaryButton: {
-    backgroundColor: '#e2e8f0',
-  },
-  buttonPressed: {
-    opacity: 0.86,
-  },
-  buttonText: {
-    color: '#f8fafc',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  secondaryButtonText: {
-    color: '#0f172a',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  statusText: {
-    color: '#0f172a',
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 4,
-  },
-  metricRow: {
-    borderTopColor: '#e2e8f0',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 9,
-  },
-  metricLabel: {
-    color: '#334155',
-    flex: 1,
-    fontSize: 13,
-    paddingRight: 16,
-  },
-  metricValue: {
-    color: '#0f172a',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  summaryCard: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#dbe4ee',
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: 12,
-    padding: 12,
-  },
-  summaryTitle: {
-    color: '#0f172a',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
   },
 });
