@@ -144,9 +144,11 @@ Optional Hugging Face configuration:
 
 ```bash
 LLM_PROVIDER=huggingface
-LLM_MODEL=HuggingFaceTB/SmolLM2-360M-Instruct
+LLM_MODEL=google/gemma-2-2b-it
 HF_API_TOKEN=your_hugging_face_token
 ```
+
+Gemma models on Hugging Face may require the account behind `HF_API_TOKEN` to accept Google's model terms before hosted inference works.
 
 ## Public Types
 

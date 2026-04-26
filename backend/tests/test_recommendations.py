@@ -65,7 +65,7 @@ class RecommendationServiceTest(TestCase):
     def test_hugging_face_provider_falls_back_without_token(self) -> None:
         primary = HuggingFaceClient(
             api_token=None,
-            model="HuggingFaceTB/SmolLM2-360M-Instruct",
+            model="google/gemma-2-2b-it",
             api_base_url="https://api-inference.huggingface.co",
             timeout_seconds=0.1,
         )

@@ -64,11 +64,11 @@ Optional hosted provider:
 
 ```env
 LLM_PROVIDER=huggingface
-LLM_MODEL=HuggingFaceTB/SmolLM2-360M-Instruct
+LLM_MODEL=google/gemma-2-2b-it
 HF_API_TOKEN=your_hugging_face_token
 ```
 
-Keep Hugging Face as an optional adapter, not the presentation default. Hosted free tiers can have quota, availability, cold-start, or network issues, so the backend falls back to the mock provider if the hosted call is unavailable.
+Keep Hugging Face Gemma as an optional adapter, not the presentation default. Hosted free tiers can have quota, availability, cold-start, model access, or network issues, so the backend falls back to the mock provider if the hosted call is unavailable.
 
 ## Planned Files
 
