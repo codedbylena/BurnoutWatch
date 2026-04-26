@@ -1,6 +1,6 @@
 # BurnoutWatch
 
-**Team Members:** Lena (codedbylena), Munamadan
+**Team Members:** Dipan Kharel, Magadalena Maga, Knowledge Neupane
 
 ## Problem Statement
 
